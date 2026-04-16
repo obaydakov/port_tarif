@@ -6,14 +6,14 @@ import math
 
 import pytest
 
-from calculator import (
+from calculation.calculator import (
     CalculationError,
     TariffLineItem,
     apply_rule,
     run_all_calculations,
 )
-from tariff_schema import ExtractedTariffRule, RateBracket
-from vessel_profile import VesselProfile, load_vessel_profile
+from core.tariff_schema import ExtractedTariffRule, RateBracket
+from core.vessel_profile import VesselProfile, load_vessel_profile
 
 # ---------------------------------------------------------------------------
 # Test fixture: SUDESTADA @ Durban (from the take-home test spec)
@@ -273,7 +273,7 @@ class TestPortDues:
 class TestRunAllCalculations:
     def test_total_close_to_ground_truth(self, vessel: VesselProfile) -> None:
         """Full calculation with Transnet fallback rates matches ground truth within 0.1%."""
-        from fallback_rates import get_fallback_rules
+        from calculation.fallback_rates import get_fallback_rules
         rules = get_fallback_rules("Durban", num_operations=2)
         result = run_all_calculations(vessel, rules)
         assert result.total_zar == pytest.approx(506_830.83, rel=0.002)

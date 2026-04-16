@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from tariff_schema import ExtractedTariffRule, RateBracket
+from core.tariff_schema import ExtractedTariffRule, RateBracket
 
 
 class TestRateBracket:
