@@ -1,0 +1,137 @@
+@startuml Solution Design
+!theme plain
+skinparam backgroundColor white
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam roundCorner 10
+skinparam padding 8
+skinparam nodesep 50
+skinparam ranksep 40
+
+skinparam rectangle {
+  BorderThickness 2
+}
+
+skinparam package {
+  BorderThickness 2
+  FontSize 16
+}
+
+skinparam arrow {
+  Color #37474F
+  FontColor #37474F
+  FontSize 12
+  Thickness 2
+}
+
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #FBC02D
+  FontSize 12
+}
+
+title <size:24><b>Port Tariff Calculator -- Solution Design</b></size>\n<size:15><color:#009688>Agentic RAG System for Maritime Port Dues Automation</color></size>\n
+
+' ========== INPUT ==========
+together {
+  rectangle "<b>Natural Language Query</b>\n<i>\"SUDESTADA, 51300 GT\nbulk carrier at Durban...\"</i>" as nl #E8EAF6;line:5C6BC0
+  rectangle "<b>Structured JSON</b>\n<i>vessel_profile.json</i>" as json #E8EAF6;line:5C6BC0
+  rectangle "<b>Port Tariff PDF</b>\n<i>Transnet SA tariff book</i>" as pdf #E8EAF6;line:5C6BC0
+}
+
+' ========== NL PARSING ==========
+rectangle "<b>query_parser.py</b>\nOpenAI structured output\nNL text --> <b>VesselProfile</b>" as parser #E3F2FD;line:1E88E5
+
+' ========== DOCUMENT PROCESSING ==========
+rectangle "<b>document_processor.py</b>\npdfplumber --> PageContent\n--> LangChain chunks (87)" as docproc #E3F2FD;line:1E88E5
+
+' ========== MODELS ==========
+together {
+  rectangle "<b>vessel_profile.py</b>\nVesselProfile (Pydantic)\nGT, NT, LOA, DWT, days" as vessel #E0F2F1;line:00897B
+  rectangle "<b>tariff_schema.py</b>\nExtractedTariffRule\nRateBracket" as schema #E0F2F1;line:00897B
+}
+
+' ========== VECTOR STORE + EXTRACTION ==========
+database "<b>ChromaDB</b>\n.chroma_db/\nVector Store" as chromadb #ECEFF1;line:546E7A
+database "<b>Rule Cache</b>\n.rule_cache/\nPDF hash + tariff + port" as cache #ECEFF1;line:546E7A
+
+rectangle "<b>tariff_extractor.py</b>\nSemantic retrieval (TOP_K=8)\n+ OpenAI structured output\n--> ExtractedTariffRule per tariff" as extractor #E3F2FD;line:1E88E5
+
+' ========== AGENT ==========
+rectangle "<b>agent.py</b>\nParallel orchestration\nThreadPoolExecutor (6 concurrent)\nCache-first --> LLM --> Fallback" as agent #E8F5E9;line:2E7D32
+
+' ========== FALLBACK ==========
+rectangle "<b>fallback_rates.py</b>\nTransnet hardcoded rates\n(same ExtractedTariffRule schema)" as fallback #FFF3E0;line:EF6C00
+
+' ========== CALCULATOR ==========
+rectangle "<b>calculator.py</b>\napply_rule(vessel, rule)\nBrackets | Per-GT | Flat fee | Time-based\n<b>Zero tariff-specific logic</b>" as calc #E8F5E9;line:2E7D32
+
+' ========== OUTPUT ==========
+rectangle "<b>CalculationResult</b>\nJSON + formatted report\n6 line items with formulas" as result #F3E5F5;line:7B1FA2
+
+together {
+  rectangle "<b>main.py</b> (CLI)\nvalidate | calculate | query" as cli #F3E5F5;line:7B1FA2
+  rectangle "<b>api.py</b> (FastAPI)\n/query  /calculate\n/calculate/upload  /health" as api #F3E5F5;line:7B1FA2
+}
+
+' ========== CONNECTIONS ==========
+nl -down-> parser : "  <color:#1E88E5>gpt-5.4</color>"
+json -down-> vessel
+
+parser -down-> vessel : "VesselProfile"
+
+pdf -down-> docproc
+docproc -down-> chromadb : "index chunks"
+
+chromadb -down-> extractor : "semantic\nretrieval"
+cache -right-> extractor : "cache hit?\nskip LLM"
+
+extractor -down-> schema : "6x ExtractedTariffRule"
+extractor -left-> cache : "save rule"
+
+agent -up-> extractor : "<color:#2E7D32><b>6x parallel</b></color>"
+agent -left-> fallback : "<color:#EF6C00>LOW confidence?\nsubstitute</color>"
+fallback -down-> schema : "same schema"
+
+vessel -down-> agent
+schema -down-> agent
+
+agent -down-> calc : "rules + vessel"
+
+calc -down-> result
+
+result -down-> cli
+result -down-> api
+
+' ========== NOTES ==========
+note right of parser
+  <b>Structured Output</b>
+  Guaranteed valid schema
+  No manual JSON parsing
+end note
+
+note right of agent
+  <b>Graceful Fallback</b>
+  LLM extraction fails?
+  Same code path, different
+  rule source (hardcoded)
+end note
+
+note right of calc
+  <b>Single Generic Engine</b>
+  Handles ALL tariff types
+  from schema alone
+end note
+
+' ========== LEGEND ==========
+legend right
+  |<#E3F2FD>  | AI / LLM Layer |
+  |<#E0F2F1>  | Data Models |
+  |<#E8F5E9>  | Calculation Engine |
+  |<#FFF3E0>  | Fallback Data |
+  |<#F3E5F5>  | Entry / Output |
+  |<#ECEFF1>  | Persistence |
+endlegend
+
+@enduml

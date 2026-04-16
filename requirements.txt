@@ -1,0 +1,15 @@
+beartype
+chromadb
+fastapi
+langchain
+langchain-chroma
+
+langchain-openai
+langchain-text-splitters
+openai
+pdfplumber
+pydantic
+
+python-dotenv
+python-multipart
+uvicorn
