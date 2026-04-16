@@ -78,7 +78,7 @@ Port Tariff PDF  (data/Port Tariff.pdf)
 
 **Rule caching** — extracted rules are cached to disk by `(PDF hash, tariff type, port)`. Re-runs with the same PDF skip LLM extraction entirely.
 
-**Graceful fallback** — if LLM extraction returns LOW confidence for a tariff, the system transparently substitutes hardcoded Transnet rates from `fallback_rates.py`. The calculator code path is identical for both.
+**Graceful fallback** — the LLM is the generalizable engine; `calculation/fallback_rates.py` exists purely as a production resilience pattern. If LLM extraction returns LOW confidence for a tariff (e.g. the retrieved PDF context is ambiguous or belongs to the wrong section), the system transparently substitutes pre-encoded Transnet rates for that tariff only, rather than returning an error or a zero. The calculator code path is identical for both LLM-extracted and fallback rules — the same generic `apply_rule()` function handles both. This means the fallback never masks a failure silently: every line item in the output reports its source confidence level.
 
 **Document-agnostic** — adapting to a new port tariff document requires only re-indexing the PDF. No code changes are needed.
 
