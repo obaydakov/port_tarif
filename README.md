@@ -371,7 +371,7 @@ Tested against the reference vessel (SUDESTADA, Bulk Carrier at Durban) from the
 | Purpose | Model |
 |---|---|
 | Embeddings (vector store) | `text-embedding-3-small` |
-| Tariff rule extraction + NL query parsing | `gpt-4o` |
+| Tariff rule extraction + NL query parsing | `gpt-5.4` |
 
 > The system uses **OpenAI structured output** (`with_structured_output`) for both tariff rule extraction and natural language query parsing. This guarantees valid Pydantic schema output — no manual JSON parsing needed.
 
