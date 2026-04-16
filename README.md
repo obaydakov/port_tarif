@@ -4,6 +4,8 @@ An AI-powered system that ingests any Port Tariff PDF and **a natural language v
 
 Built as a take-home assessment for **Marcura**, demonstrating generalizable agentic RAG architecture for maritime document understanding.
 
+**Repository:** [github.com/obaydakov/port_tarif](https://github.com/obaydakov/port_tarif)
+
 ---
 
 ## Architecture Overview
@@ -21,7 +23,7 @@ Natural Language Query          Structured JSON
         │                                │
         └──────────┬─────────────────────┘
                    v
-Port Tariff PDF
+Port Tariff PDF  (data/Port Tariff.pdf)
       │
       v
 ┌─────────────────────┐
@@ -36,7 +38,7 @@ Port Tariff PDF
           │
           v
 ┌─────────────────────┐
-│  tariff_extractor   │  gpt-5.4 extracts structured ExtractedTariffRule
+│  tariff_extractor   │  GPT-4o extracts structured ExtractedTariffRule
 │  (structured output)│  via OpenAI structured output (guaranteed schema)
 └─────────┬───────────┘
           │              ┌─────────────────────────────┐
@@ -63,20 +65,20 @@ Port Tariff PDF
     ┌─────┴──────┐
     │            │
   CLI          FastAPI
- main.py       api.py
+ main.py       api/api.py
 ```
 
-### Design principles
+### Design Principles
 
 **Natural language input** — users can describe a vessel in plain English. The LLM parses the query into structured data via OpenAI structured output, then the standard pipeline calculates all applicable dues.
 
-**Schema-driven calculation** — the LLM reads the tariff PDF and populates an `ExtractedTariffRule` Pydantic schema (rates, brackets, formulas) via OpenAI structured output (guaranteed valid schema). A single generic `apply_rule()` function in `calculator.py` applies any rule to any vessel. No tariff-specific code exists in the calculator.
+**Schema-driven calculation** — the LLM reads the tariff PDF and populates an `ExtractedTariffRule` Pydantic schema (rates, brackets, formulas) via OpenAI structured output (guaranteed valid schema). A single generic `apply_rule()` function applies any rule to any vessel. No tariff-specific code exists in the calculator.
 
 **Parallel extraction** — all 6 tariff types are extracted concurrently via `ThreadPoolExecutor`, cutting LLM extraction time by ~5x compared to sequential processing.
 
 **Rule caching** — extracted rules are cached to disk by `(PDF hash, tariff type, port)`. Re-runs with the same PDF skip LLM extraction entirely.
 
-**Graceful fallback** — if LLM extraction returns LOW confidence for a tariff (e.g. ambiguous PDF context), the system transparently substitutes hardcoded Transnet rates from `fallback_rates.py`. The calculator code path is identical for both.
+**Graceful fallback** — if LLM extraction returns LOW confidence for a tariff, the system transparently substitutes hardcoded Transnet rates from `fallback_rates.py`. The calculator code path is identical for both.
 
 **Document-agnostic** — adapting to a new port tariff document requires only re-indexing the PDF. No code changes are needed.
 
@@ -85,25 +87,51 @@ Port Tariff PDF
 ## Project Structure
 
 ```
-Marcura/
-├── tariff_schema.py       # ExtractedTariffRule + RateBracket Pydantic models (the schema contract)
-├── fallback_rates.py      # Transnet-specific hardcoded rates as ExtractedTariffRule objects
-├── config.py              # Model names, API keys, constants, section keywords
-├── vessel_profile.py      # Pydantic vessel data model + derived properties
-├── query_parser.py        # Natural language vessel query -> VesselProfile (LLM-powered)
-├── document_processor.py  # PDF -> pdfplumber -> LangChain Document chunks
-├── tariff_extractor.py    # ChromaDB vector store + LLM rule extraction (structured output)
-├── calculator.py          # Generic apply_rule() engine — no tariff-specific logic
-├── agent.py               # Pipeline orchestration (parallel) + report formatter
-├── main.py                # CLI entry point (validate / calculate / query commands)
-├── api.py                 # FastAPI REST endpoints (including /query for NL input)
-├── tests/                 # Unit tests (pytest)
-│   ├── test_calculator.py # 16 tests covering all tariff patterns + edge cases
-│   └── test_tariff_schema.py # 10 tests for schema validation + serialization
-├── requirements.txt       # Dependencies without version pins
-├── pyproject.toml         # uv project config, mypy/pyright settings
-├── .env                   # OPENAI_API_KEY (not committed)
-└── Port Tariff.pdf        # Reference: Transnet SA tariff book (Apr 2024-Mar 2025)
+port_tarif/
+├── data/
+│   └── Port Tariff.pdf            # Transnet SA tariff book (Apr 2024–Mar 2025)
+│
+├── artefacts/
+│   ├── Generative AI Solutions Developer Take Home Test.pdf
+│   ├── Generative AI Solutions Developer Take Home Test.docx
+│   ├── Port_Tariff_Calculator_Pitch.pptx
+│   ├── solution_design.png
+│   ├── solution_design.puml
+│   └── solution_design.svg
+│
+├── src/
+│   ├── main.py                    # CLI entry point (validate / calculate / query)
+│   │
+│   ├── core/                      # Domain models — no side-effects, imported everywhere
+│   │   ├── config.py              # API keys, model names, constants, section keywords
+│   │   ├── tariff_schema.py       # ExtractedTariffRule + RateBracket Pydantic models
+│   │   └── vessel_profile.py      # VesselProfile Pydantic model + derived properties
+│   │
+│   ├── ingestion/                 # PDF loading & vector store
+│   │   ├── document_processor.py  # PDF -> pdfplumber -> LangChain Document chunks
+│   │   └── tariff_extractor.py    # ChromaDB vector store + LLM rule extraction
+│   │
+│   ├── calculation/               # Deterministic tariff math — zero LLM dependency
+│   │   ├── calculator.py          # Generic apply_rule() engine
+│   │   └── fallback_rates.py      # Transnet hardcoded rates as ExtractedTariffRule objects
+│   │
+│   ├── agent/                     # LLM orchestration layer
+│   │   ├── agent.py               # Parallel pipeline + report formatter
+│   │   └── query_parser.py        # Natural language vessel query -> VesselProfile
+│   │
+│   ├── api/                       # FastAPI REST surface
+│   │   └── api.py                 # /health, /query, /calculate, /calculate/upload
+│   │
+│   └── scripts/                   # One-off utilities
+│       └── create_presentation.py
+│
+├── tests/
+│   ├── test_calculator.py         # 16 tests: all 6 tariff patterns + edge cases
+│   └── test_tariff_schema.py      # 10 tests: schema validation + serialization
+│
+├── pyproject.toml                 # uv project config, pytest pythonpath, mypy/pyright
+├── requirements.txt               # Dependencies without version pins
+└── .env                           # OPENAI_API_KEY (not committed)
 ```
 
 ---
@@ -118,45 +146,50 @@ Marcura/
 ### Install
 
 ```bash
-cd Marcura
+# Clone the repository
+git clone https://github.com/obaydakov/port_tarif.git
+cd port_tarif
 
-# Option 1: uv (recommended)
+# Install dependencies
 uv sync
+```
 
-# Option 2: pip (if uv is not installed)
+Alternatively, with plain pip:
+
+```bash
 python -m venv .venv
 # Windows:
 .venv\Scripts\activate
 # macOS/Linux:
-# source .venv/bin/activate
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
 ### API Key
 
-Create a `.env` file (or set a system environment variable):
+Create a `.env` file in the project root (or set a system environment variable):
 
 ```
 OPENAI_API_KEY=your_key_here
 ```
 
-> **Note:** The system runs fully without an API key using `--no-llm`. In this mode it uses the hardcoded Transnet fallback rates and produces identical numerical results. The `query` command always requires an API key (natural language parsing needs LLM).
+> **Note:** The system runs fully without an API key using `--no-llm`. In this mode it uses hardcoded Transnet fallback rates and produces identical numerical results. The `query` command always requires an API key (natural language parsing needs an LLM).
 
 ---
 
 ## Usage
 
+All commands are run from the **project root**.
+
 ### CLI — Natural language vessel query
 
-Describe a vessel in plain English and the system calculates all applicable dues:
+Describe a vessel in plain English; the system parses it and calculates all applicable dues:
 
 ```bash
-uv run python main.py query \
+uv run python src/main.py query \
   "Calculate port dues for SUDESTADA, a 51300 GT bulk carrier at Durban, \
    DWT 93274, NT 31192, LOA 229.2m, 3.39 days alongside, 2 operations"
 ```
-
-The LLM parses the natural language into structured vessel data, then extracts tariff rules from the PDF and calculates all dues.
 
 ### CLI — Validate against reference vessel
 
@@ -164,20 +197,23 @@ Runs SUDESTADA (Bulk Carrier, GT 51,300) at Durban and compares against ground t
 
 ```bash
 # Fallback mode — no API key needed, instant
-uv run python main.py validate --no-llm
+uv run python src/main.py validate --no-llm
 
 # Full agentic mode — LLM extracts rules from PDF (requires OPENAI_API_KEY)
-uv run python main.py validate
+uv run python src/main.py validate
 
-# Force rebuild of the vector store (required after switching embedding models)
-uv run python main.py validate --rebuild
+# Force rebuild of the vector store
+uv run python src/main.py validate --rebuild
+
+# Custom tariff PDF
+uv run python src/main.py validate --pdf data/Port Tariff.pdf
 ```
 
 ### CLI — Custom vessel and port
 
 ```bash
-uv run python main.py calculate \
-  --pdf "Port Tariff.pdf" \
+uv run python src/main.py calculate \
+  --pdf "data/Port Tariff.pdf" \
   --vessel my_vessel.json \
   --port "Cape Town" \
   --no-llm
@@ -223,18 +259,24 @@ uv run python main.py calculate \
 ### Running Tests
 
 ```bash
-# Run all tests
+# Verbose (recommended)
 uv run pytest tests/ -v
 
-# Quick run
+# Quick summary
 uv run pytest tests/ -q
 ```
 
 ### API Server
 
 ```bash
-# Start server (port 8000)
-uv run python api.py
+uv run python src/api/api.py
+```
+
+Or via uvicorn directly from the `src/` directory:
+
+```bash
+cd src
+uv run uvicorn api.api:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 **Endpoints:**
@@ -248,20 +290,20 @@ uv run python api.py
 
 **Interactive docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 
-**Example: Natural language query:**
+**Example: Natural language query (`POST /query`):**
 
 ```json
 {
   "query": "Calculate port dues for SUDESTADA, a 51300 GT bulk carrier at Durban, DWT 93274, NT 31192, LOA 229.2m, 3.39 days alongside, 2 operations",
-  "tariff_pdf_path": "D:\\CHI\\Marcura\\Port Tariff.pdf"
+  "tariff_pdf_path": "data/Port Tariff.pdf"
 }
 ```
 
-**Example: Structured JSON request:**
+**Example: Structured JSON request (`POST /calculate`):**
 
 ```json
 {
-  "tariff_pdf_path": "D:\\CHI\\Marcura\\Port Tariff.pdf",
+  "tariff_pdf_path": "data/Port Tariff.pdf",
   "vessel_data": {
     "vessel_metadata": { "name": "SUDESTADA", "built_year": 2010, "flag": "MLT - Malta" },
     "technical_specs": { "type": "Bulk Carrier", "dwt": 93274, "gross_tonnage": 51300, "net_tonnage": 31192, "loa_meters": 229.2, "beam_meters": 38.0, "draft_sw_s_w_t": [14.9, 0.0, 0.0] },
@@ -307,7 +349,7 @@ Tested against the reference vessel (SUDESTADA, Bulk Carrier at Durban) from the
 | Port Dues | 199,371.35 | 199,549.22 | -0.09% |
 | **TOTAL** | **506,897.43** | **506,830.83** | **+0.01%** |
 
-3 tariffs are exact, all 6 are within +/-1.1% of ground truth (which the spec labels as "Approx.").
+3 tariffs are exact, all 6 are within ±1.1% of ground truth (which the spec labels as "Approx.").
 
 ---
 
@@ -317,8 +359,8 @@ Tested against the reference vessel (SUDESTADA, Bulk Carrier at Durban) from the
 |---|---|---|
 | Light Dues | Section 1.1 | R117.08 per 100 GT (non-coastal vessels) |
 | VTS Dues | Section 2.1 | R0.65/GT at Durban/Saldanha, R0.54/GT elsewhere |
-| Pilotage Dues | Section 3.3 | Port-specific basic fee + R/100GT x services |
-| Towage Dues | Section 3.6 | GT-bracket base fee x services |
+| Pilotage Dues | Section 3.3 | Port-specific basic fee + R/100GT × services |
+| Towage Dues | Section 3.6 | GT-bracket base fee × services |
 | Running Lines | Section 3.9 | R1,654.56/service (Other Ports), 6 services/call |
 | Port Dues | Section 4.1 | Basic R192.73/100GT + R57.79/100GT/day (pro-rata) |
 
@@ -329,11 +371,11 @@ Tested against the reference vessel (SUDESTADA, Bulk Carrier at Durban) from the
 | Purpose | Model |
 |---|---|
 | Embeddings (vector store) | `text-embedding-3-small` |
-| Tariff rule extraction + NL query parsing | `gpt-5.4` |
+| Tariff rule extraction + NL query parsing | `gpt-4o` |
 
 > The system uses **OpenAI structured output** (`with_structured_output`) for both tariff rule extraction and natural language query parsing. This guarantees valid Pydantic schema output — no manual JSON parsing needed.
 
-> The system runs fully without an API key using `--no-llm`. Hardcoded Transnet fallback rates in `fallback_rates.py` are applied through the same generic calculator — identical code path.
+> The system runs fully without an API key using `--no-llm`. Hardcoded Transnet fallback rates in `calculation/fallback_rates.py` are applied through the same generic calculator — identical code path.
 
 ---
 
@@ -357,7 +399,7 @@ uv run pytest tests/ -v
 ### Accuracy improvements
 
 - **Better running lines formula** — integrate a lookup table keyed on vessel LOA and cargo type to replace the fixed 6-services heuristic; this would bring the +1.10% error to near-zero
-- **Surcharge engine** — currently surcharges (outside working hours, pilot not ready within 30min, vessel late by >30min) are not applied; a time-of-day + event-based surcharge module would handle these
+- **Surcharge engine** — surcharges (outside working hours, pilot not ready within 30min, vessel late by >30min) are not currently applied; a time-of-day + event-based surcharge module would handle these
 - **Cargo dues** — Section 7 of the tariff book covers cargo dues (dry bulk, breakbulk, containers) by cargo tonnage; adding this would complete the full port cost estimate
 - **Berth dues** — Section 4.1.2 berth dues apply to vessels not handling cargo or undergoing repairs; currently excluded
 
@@ -377,7 +419,7 @@ uv run pytest tests/ -v
 
 - **CI pipeline** — GitHub Actions workflow running `pytest`, `mypy`, and `pyright` on every PR; gate merges on test pass + type-check clean
 - **Docker** — single-stage `Dockerfile` with `uv sync --frozen` for reproducible builds; expose port 8000 for the FastAPI server
-- **Cloud deployment** — containerised API deployable to AWS ECS/Fargate, GCP Cloud Run, or Azure Container Apps; stateless design (ChromaDB + rule cache can be mounted as a volume or replaced with managed vector DB)
+- **Cloud deployment** — containerised API deployable to AWS ECS/Fargate, GCP Cloud Run, or Azure Container Apps; stateless design (ChromaDB + rule cache can be mounted as a volume or replaced with a managed vector DB)
 - **Secrets management** — `OPENAI_API_KEY` injected via environment variable (AWS Secrets Manager, GCP Secret Manager, or Kubernetes secrets) — never baked into the image
 - **Monitoring** — structured JSON logging + health check endpoint (`GET /health`) ready for load balancer probes; add OpenTelemetry tracing for LLM call latency visibility
 
