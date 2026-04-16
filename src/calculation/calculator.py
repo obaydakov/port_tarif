@@ -6,8 +6,8 @@ from typing import Any
 
 from beartype import beartype
 
-from tariff_schema import ExtractedTariffRule, RateBracket
-from vessel_profile import VesselProfile
+from core.tariff_schema import ExtractedTariffRule, RateBracket
+from core.vessel_profile import VesselProfile
 
 
 class CalculationError(Exception):

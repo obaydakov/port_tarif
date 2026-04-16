@@ -22,8 +22,8 @@ from beartype import beartype
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from config import OPENAI_API_KEY, OPENAI_MODEL
-from vessel_profile import VesselProfile, load_vessel_profile
+from core.config import OPENAI_API_KEY, OPENAI_MODEL
+from core.vessel_profile import VesselProfile, load_vessel_profile
 
 # ---------------------------------------------------------------------------
 # Intermediate schema for LLM extraction (flat, forgiving)

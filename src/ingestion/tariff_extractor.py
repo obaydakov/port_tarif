@@ -12,7 +12,7 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from config import (
+from core.config import (
     CHROMA_COLLECTION_NAME,
     CHROMA_PERSIST_DIR,
     OPENAI_API_KEY,
@@ -21,7 +21,7 @@ from config import (
     TARIFF_SECTION_KEYWORDS,
     TOP_K_RETRIEVAL,
 )
-from tariff_schema import ExtractedTariffRule
+from core.tariff_schema import ExtractedTariffRule
 
 # ---------------------------------------------------------------------------
 # LLM extraction prompt (schema is enforced by structured output — not in prompt)
@@ -90,7 +90,7 @@ _SECTION_HINTS: dict[str, list[str]] = {
 # Rule cache — avoids re-running LLM extraction for the same PDF + tariff + port
 # ---------------------------------------------------------------------------
 
-_RULE_CACHE_DIR = os.path.join(os.path.dirname(__file__), ".rule_cache")
+_RULE_CACHE_DIR = str(Path(__file__).parent.parent.parent / ".rule_cache")
 
 
 def _pdf_hash(pdf_path: str) -> str:

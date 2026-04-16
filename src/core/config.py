@@ -6,7 +6,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load .env file if present (development convenience — production uses system env vars)
-_env_path = Path(__file__).parent / ".env"
+# __file__ is src/core/config.py → parent.parent.parent is the project root
+_env_path = Path(__file__).parent.parent.parent / ".env"
 if _env_path.exists():
     load_dotenv(dotenv_path=_env_path, override=False)
 
@@ -20,7 +21,7 @@ OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
 # ---------------------------------------------------------------------------
 # Vector store
 # ---------------------------------------------------------------------------
-CHROMA_PERSIST_DIR: str = os.path.join(os.path.dirname(__file__), ".chroma_db")
+CHROMA_PERSIST_DIR: str = str(Path(__file__).parent.parent.parent / ".chroma_db")
 CHROMA_COLLECTION_NAME: str = "port_tariffs"
 
 # ---------------------------------------------------------------------------

@@ -5,18 +5,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI
 
-from calculator import CalculationResult, run_all_calculations
-from config import OPENAI_API_KEY, TARIFF_TYPES
-from fallback_rates import get_fallback_rules
-from tariff_extractor import (
+from calculation.calculator import CalculationResult, run_all_calculations
+from calculation.fallback_rates import get_fallback_rules
+from core.config import OPENAI_API_KEY, TARIFF_TYPES
+from core.tariff_schema import ExtractedTariffRule
+from core.vessel_profile import VesselProfile
+from ingestion.tariff_extractor import (
     extract_tariff_rule,
     load_cached_rule,
     make_extraction_llm,
     retrieve_tariff_context,
     save_cached_rule,
 )
-from tariff_schema import ExtractedTariffRule
-from vessel_profile import VesselProfile
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +140,7 @@ def run_agentic_calculation(
         llm = make_extraction_llm()
 
         # Compute PDF hash for rule caching (if path was provided)
-        from tariff_extractor import _pdf_hash
+        from ingestion.tariff_extractor import _pdf_hash
         pdf_hash = _pdf_hash(pdf_path) if pdf_path else None
 
         rules = _extract_all_rules(llm, vectorstore, vessel, pdf_hash=pdf_hash)

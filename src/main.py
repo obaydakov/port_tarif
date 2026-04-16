@@ -7,12 +7,12 @@ from pathlib import Path
 
 from beartype import beartype
 
-from agent import format_results, run_agentic_calculation
-from config import OPENAI_API_KEY
-from document_processor import process_tariff_pdf
-from query_parser import parse_vessel_query
-from tariff_extractor import build_vector_store
-from vessel_profile import VesselProfile, load_vessel_profile
+from agent.agent import format_results, run_agentic_calculation
+from agent.query_parser import parse_vessel_query
+from core.config import OPENAI_API_KEY
+from core.vessel_profile import VesselProfile, load_vessel_profile
+from ingestion.document_processor import process_tariff_pdf
+from ingestion.tariff_extractor import build_vector_store
 
 # ---------------------------------------------------------------------------
 # Reference vessel for validation (from the Take Home Test spec)
@@ -59,7 +59,7 @@ GROUND_TRUTH: dict[str, float] = {
     "running_lines": 19_639.50,
 }
 
-DEFAULT_TARIFF_PDF = str(Path(__file__).parent / "Port Tariff.pdf")
+DEFAULT_TARIFF_PDF = str(Path(__file__).parent.parent / "Port Tariff.pdf")
 
 
 @beartype

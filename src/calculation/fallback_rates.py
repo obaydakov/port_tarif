@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tariff_schema import ExtractedTariffRule, RateBracket
+from core.tariff_schema import ExtractedTariffRule, RateBracket
 
 # ---------------------------------------------------------------------------
 # Transnet South African Port Tariffs — April 2024 to March 2025

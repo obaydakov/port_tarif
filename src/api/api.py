@@ -9,11 +9,11 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from agent import format_results, run_agentic_calculation
-from document_processor import process_tariff_pdf
-from query_parser import parse_vessel_query
-from tariff_extractor import build_vector_store
-from vessel_profile import load_vessel_profile
+from agent.agent import format_results, run_agentic_calculation
+from core.vessel_profile import load_vessel_profile
+from ingestion.document_processor import process_tariff_pdf
+from ingestion.tariff_extractor import build_vector_store
+from agent.query_parser import parse_vessel_query
 
 app = FastAPI(
     title="Port Tariff Calculator API",
@@ -154,4 +154,4 @@ def query_natural_language(request: NaturalLanguageQueryRequest) -> JSONResponse
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("api.api:app", host="0.0.0.0", port=8000, reload=True)

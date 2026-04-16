@@ -9,7 +9,7 @@ from beartype import beartype
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from config import CHUNK_OVERLAP, CHUNK_SIZE
+from core.config import CHUNK_OVERLAP, CHUNK_SIZE
 
 
 @dataclass(frozen=True, slots=True)
