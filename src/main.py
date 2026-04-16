@@ -59,7 +59,7 @@ GROUND_TRUTH: dict[str, float] = {
     "running_lines": 19_639.50,
 }
 
-DEFAULT_TARIFF_PDF = str(Path(__file__).parent.parent / "Port Tariff.pdf")
+DEFAULT_TARIFF_PDF = str(Path(__file__).parent.parent / "data" / "Port Tariff.pdf")
 
 
 @beartype
