@@ -31,48 +31,50 @@ skinparam note {
   FontSize 12
 }
 
-title <size:24><b>Port Tariff Calculator -- Solution Design</b></size>\n<size:15><color:#009688>Agentic RAG System for Maritime Port Dues Automation</color></size>\n
+title <size:24><b>Port Tariff Calculator -- Solution Design</b></size>\n<size:15><color:#009688>Generalisable Agentic RAG for Maritime Port Dues (Discovery -> Extraction -> Calculation)</color></size>\n
 
 ' ========== INPUT ==========
 together {
   rectangle "<b>Natural Language Query</b>\n<i>\"SUDESTADA, 51300 GT\nbulk carrier at Durban...\"</i>" as nl #E8EAF6;line:5C6BC0
   rectangle "<b>Structured JSON</b>\n<i>vessel_profile.json</i>" as json #E8EAF6;line:5C6BC0
-  rectangle "<b>Port Tariff PDF</b>\n<i>Transnet SA tariff book</i>" as pdf #E8EAF6;line:5C6BC0
+  rectangle "<b>Port Tariff PDF</b>\n<i>any port, any country</i>" as pdf #E8EAF6;line:5C6BC0
 }
 
 ' ========== NL PARSING ==========
 rectangle "<b>query_parser.py</b>\nOpenAI structured output\nNL text --> <b>VesselProfile</b>" as parser #E3F2FD;line:1E88E5
 
 ' ========== DOCUMENT PROCESSING ==========
-rectangle "<b>document_processor.py</b>\npdfplumber --> PageContent\n--> LangChain chunks (87)" as docproc #E3F2FD;line:1E88E5
+rectangle "<b>document_processor.py</b>\npdfplumber --> PageContent\n--> LangChain chunks" as docproc #E3F2FD;line:1E88E5
 
 ' ========== MODELS ==========
 together {
-  rectangle "<b>vessel_profile.py</b>\nVesselProfile (Pydantic)\nGT, NT, LOA, DWT, days" as vessel #E0F2F1;line:00897B
-  rectangle "<b>tariff_schema.py</b>\nExtractedTariffRule\nRateBracket" as schema #E0F2F1;line:00897B
+  rectangle "<b>vessel_profile.py</b>\nVesselProfile (Pydantic)\nGT, NT, DWT, LOA, BEAM,\nDRAFT, cargo, days" as vessel #E0F2F1;line:00897B
+  rectangle "<b>tariff_schema.py</b>\n<b>DiscoveredTariff(Set)</b>\n<b>ExtractedTariffRule</b>\nRateBracket" as schema #E0F2F1;line:00897B
 }
 
-' ========== VECTOR STORE + EXTRACTION ==========
+' ========== VECTOR STORE + CACHES ==========
 database "<b>ChromaDB</b>\n.chroma_db/\nVector Store" as chromadb #ECEFF1;line:546E7A
+database "<b>Discovery Cache</b>\n.discovery_cache/\nkeyed by PDF hash" as dcache #ECEFF1;line:546E7A
 database "<b>Rule Cache</b>\n.rule_cache/\nPDF hash + tariff + port" as cache #ECEFF1;line:546E7A
 
-rectangle "<b>tariff_extractor.py</b>\nSemantic retrieval (TOP_K=8)\n+ OpenAI structured output\n--> ExtractedTariffRule per tariff" as extractor #E3F2FD;line:1E88E5
+' ========== DISCOVERY ==========
+rectangle "<b>PHASE 1 -- Discovery</b>\ntariff_extractor.discover_tariffs()\nBroad retrieval (TOP_K=40)\n+ OpenAI structured output\n--> <b>DiscoveredTariffSet</b>\n(document's own taxonomy,\nno hardcoded tariff names)" as discovery #FFF3E0;line:EF6C00
+
+' ========== EXTRACTION ==========
+rectangle "<b>PHASE 2 -- Extraction</b>\ntariff_extractor.extract_tariff_rule()\nPer-tariff retrieval (TOP_K=8)\nDynamic query from discovered\nname + keywords + section\n+ OpenAI structured output\n--> <b>ExtractedTariffRule</b>\n(schema describes shape,\nnot formula)" as extractor #E3F2FD;line:1E88E5
 
 ' ========== AGENT ==========
-rectangle "<b>agent.py</b>\nParallel orchestration\nThreadPoolExecutor (6 concurrent)\nCache-first --> LLM --> Fallback" as agent #E8F5E9;line:2E7D32
-
-' ========== FALLBACK ==========
-rectangle "<b>fallback_rates.py</b>\nTransnet hardcoded rates\n(same ExtractedTariffRule schema)" as fallback #FFF3E0;line:EF6C00
+rectangle "<b>agent.py</b>\nrun_agentic_calculation()\n3-phase orchestration\nThreadPoolExecutor\n(N tariffs in parallel)\n<b>No hardcoded fallback</b>" as agent #E8F5E9;line:2E7D32
 
 ' ========== CALCULATOR ==========
-rectangle "<b>calculator.py</b>\napply_rule(vessel, rule)\nBrackets | Per-GT | Flat fee | Time-based\n<b>Zero tariff-specific logic</b>" as calc #E8F5E9;line:2E7D32
+rectangle "<b>PHASE 3 -- Calculation</b>\ncalculator.apply_rule(vessel, rule)\nBrackets | per-unit (GT/NT/DWT/\nLOA/BEAM/DRAFT/CARGO_MT)\n| flat fee | min/max bounds\n| time component | multiplier\n<b>Zero tariff-specific logic</b>" as calc #E8F5E9;line:2E7D32
 
 ' ========== OUTPUT ==========
-rectangle "<b>CalculationResult</b>\nJSON + formatted report\n6 line items with formulas" as result #F3E5F5;line:7B1FA2
+rectangle "<b>CalculationResult</b>\nN line items with tariff_name,\ncurrency, amount, formula,\n<b>confidence (HIGH/MED/LOW)</b>,\nbreakdown, notes" as result #F3E5F5;line:7B1FA2
 
 together {
   rectangle "<b>main.py</b> (CLI)\nvalidate | calculate | query" as cli #F3E5F5;line:7B1FA2
-  rectangle "<b>api.py</b> (FastAPI)\n/query  /calculate\n/calculate/upload  /health" as api #F3E5F5;line:7B1FA2
+  rectangle "<b>api.py</b> (FastAPI 2.0.0)\n/query  /calculate\n/calculate/upload  /health" as api #F3E5F5;line:7B1FA2
 }
 
 ' ========== CONNECTIONS ==========
@@ -84,15 +86,20 @@ parser -down-> vessel : "VesselProfile"
 pdf -down-> docproc
 docproc -down-> chromadb : "index chunks"
 
-chromadb -down-> extractor : "semantic\nretrieval"
+chromadb -down-> discovery : "broad\nretrieval"
+dcache -right-> discovery : "cache hit?\nskip LLM"
+
+discovery -down-> schema : "DiscoveredTariffSet"
+discovery -left-> dcache : "save taxonomy"
+
+chromadb -down-> extractor : "per-tariff\nretrieval"
 cache -right-> extractor : "cache hit?\nskip LLM"
 
-extractor -down-> schema : "6x ExtractedTariffRule"
+extractor -down-> schema : "Nx ExtractedTariffRule"
 extractor -left-> cache : "save rule"
 
-agent -up-> extractor : "<color:#2E7D32><b>6x parallel</b></color>"
-agent -left-> fallback : "<color:#EF6C00>LOW confidence?\nsubstitute</color>"
-fallback -down-> schema : "same schema"
+agent -up-> discovery : "<color:#EF6C00><b>Phase 1</b></color>"
+agent -up-> extractor : "<color:#2E7D32><b>Phase 2 (parallel)</b></color>"
 
 vessel -down-> agent
 schema -down-> agent
@@ -105,31 +112,47 @@ result -down-> cli
 result -down-> api
 
 ' ========== NOTES ==========
-note right of parser
-  <b>Structured Output</b>
-  Guaranteed valid schema
-  No manual JSON parsing
+note right of discovery
+  <b>Runtime Taxonomy</b>
+  LLM reads the document
+  and names the tariffs.
+  No fixed list of 6 types.
+  No hardcoded section numbers.
+end note
+
+note right of extractor
+  <b>Shape-Neutral Prompt</b>
+  Describes the SCHEMA's
+  building blocks -- does NOT
+  prescribe formulas per
+  tariff category.
 end note
 
 note right of agent
-  <b>Graceful Fallback</b>
-  LLM extraction fails?
-  Same code path, different
-  rule source (hardcoded)
+  <b>No Hardcoded Fallback</b>
+  LOW-confidence extractions
+  surface as line items with
+  confidence=LOW and notes --
+  never silently substituted
+  with inline rates.
 end note
 
 note right of calc
   <b>Single Generic Engine</b>
-  Handles ALL tariff types
-  from schema alone
+  One apply_rule() handles
+  every tariff from the
+  schema. 8 measurement
+  bases, bounds, brackets,
+  time, multiplier -- all
+  independent knobs.
 end note
 
 ' ========== LEGEND ==========
 legend right
+  |<#FFF3E0>  | Discovery (Phase 1) |
   |<#E3F2FD>  | AI / LLM Layer |
   |<#E0F2F1>  | Data Models |
-  |<#E8F5E9>  | Calculation Engine |
-  |<#FFF3E0>  | Fallback Data |
+  |<#E8F5E9>  | Orchestration & Calc |
   |<#F3E5F5>  | Entry / Output |
   |<#ECEFF1>  | Persistence |
 endlegend
