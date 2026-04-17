@@ -124,8 +124,8 @@ add_text(slide2, Inches(0.8), Inches(1.4), Inches(5.5), Inches(0.5),
 pipeline_steps = [
     "1.  Natural Language Query --> LLM parses to structured VesselProfile",
     "2.  PDF --> pdfplumber --> LangChain chunks --> ChromaDB vector store",
-    "3.  Semantic retrieval per tariff type (6 parallel queries)",
-    "4.  OpenAI structured output --> ExtractedTariffRule (Pydantic)",
+    "3.  DISCOVERY -- LLM lists every chargeable tariff the document defines",
+    "4.  EXTRACTION -- per-tariff RAG + structured output into ExtractedTariffRule",
     "5.  Generic apply_rule() calculator -- zero tariff-specific code",
     "6.  CalculationResult --> CLI report or JSON API response",
 ]
@@ -146,14 +146,14 @@ principles = [
     "Natural Language Input -- users describe vessels in plain "
     "English; no JSON required",
 
-    "Parallel Extraction -- all 6 tariff types extracted "
-    "concurrently via ThreadPoolExecutor (~5x speedup)",
+    "Runtime Discovery -- tariff taxonomy is identified per document; "
+    "no tariff names or section numbers live in code",
 
-    "Graceful Fallback -- LOW-confidence extractions "
-    "transparently use hardcoded rates (same code path)",
+    "No Hardcoded Fallback -- LOW-confidence extractions surface "
+    "as line items with confidence=LOW; no silent substitution",
 
-    "Rule Caching -- extracted rules persisted by PDF hash; "
-    "re-runs skip LLM entirely",
+    "Parallel Extraction + Caching -- rules and discovery persisted "
+    "by PDF hash; re-runs skip LLM entirely",
 
     "Document-Agnostic -- new port tariff = re-index PDF, "
     "zero code changes needed",
@@ -179,12 +179,12 @@ add_text(slide3, Inches(0.8), Inches(1.4), Inches(5.5), Inches(0.5),
 modules = [
     ("query_parser.py", "NL text -> VesselProfile", ACCENT_BLUE),
     ("document_processor.py", "PDF -> PageContent -> LangChain chunks", ACCENT_BLUE),
-    ("tariff_extractor.py", "ChromaDB index + OpenAI structured extraction + disk cache", ACCENT_BLUE),
-    ("tariff_schema.py", "ExtractedTariffRule + RateBracket (schema contract)", TEAL),
+    ("tariff_extractor.py", "Discovery + ChromaDB RAG + OpenAI structured extraction + cache", ACCENT_BLUE),
+    ("tariff_schema.py", "ExtractedTariffRule + RateBracket + DiscoveredTariff (generic)", TEAL),
     ("vessel_profile.py", "VesselProfile Pydantic model + derived props", TEAL),
     ("calculator.py", "Generic apply_rule() -- zero tariff-specific logic", ACCENT_GREEN),
-    ("agent.py", "Parallel orchestration + fallback + report formatter", ACCENT_GREEN),
-    ("fallback_rates.py", "Transnet hardcoded rates as ExtractedTariffRule objects", ACCENT_ORANGE),
+    ("agent.py", "Discovery -> extraction -> calculation orchestration", ACCENT_GREEN),
+    ("config.py", "LLM models + chunking + retrieval knobs (no tariff taxonomy)", ACCENT_ORANGE),
     ("main.py", "CLI: validate / calculate / query", RGBColor(0x78, 0x78, 0x78)),
     ("api.py", "FastAPI: /query, /calculate, /calculate/upload, /health", RGBColor(0x78, 0x78, 0x78)),
 ]
@@ -376,11 +376,11 @@ add_text(slide5, col_starts[2], Inches(1.42), col_w, Inches(0.5),
          "  Performance & API", size=17, bold=True, color=WHITE)
 
 perf_items = [
-    "Parallel extraction -- ThreadPoolExecutor, 6 tariffs concurrently (~5x speedup)",
+    "Parallel extraction -- ThreadPoolExecutor, all discovered tariffs concurrently",
     "Disk rule cache -- SHA-256 PDF hash keying, skip LLM on cache hit",
+    "Discovery cache -- per-document tariff taxonomy cached by PDF hash",
     "FastAPI REST -- /query (NL), /calculate (JSON), /calculate/upload (file), /health",
     "Vector store caching -- ChromaDB persisted, rebuilt only on demand",
-    "Fallback mode -- instant results with --no-llm, no API key needed",
 ]
 add_bullet_list(slide5, col_starts[2], Inches(2.1), col_w, Inches(4.5),
                 perf_items, size=13, color=DARK_GRAY, spacing=Pt(8))

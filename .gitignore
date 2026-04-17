@@ -9,9 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
-# ChromaDB vector store + rule cache
+# ChromaDB vector store + rule / discovery cache
 .chroma_db/
 .rule_cache/
+.discovery_cache/
 
 # Test / pytest cache
 .pytest_cache/

@@ -1,4 +1,10 @@
-"""Unit tests for the generic tariff calculator engine."""
+"""Unit tests for the generic tariff calculator engine.
+
+These tests verify that the generic calculator reproduces known tariff
+calculations when given the right schema values.  The rules used as fixtures
+here are inline test data — they exercise the CALCULATOR and say nothing
+about where rules come from in production (which is always LLM extraction).
+"""
 
 from __future__ import annotations
 
@@ -7,7 +13,6 @@ import math
 import pytest
 
 from calculation.calculator import (
-    CalculationError,
     TariffLineItem,
     apply_rule,
     run_all_calculations,
@@ -59,13 +64,14 @@ def vessel() -> VesselProfile:
 
 
 # ---------------------------------------------------------------------------
-# Light Dues — R117.08 per 100 GT (ceil)
+# Light Dues — simple per-100-GT rate with ceiling
 # ---------------------------------------------------------------------------
 
 class TestLightDues:
     def test_exact_match(self, vessel: VesselProfile) -> None:
         rule = ExtractedTariffRule(
-            tariff_type="light_dues",
+            tariff_name="light_dues",
+            measurement_basis="GT",
             rate_per_unit=117.08,
             unit_divisor=100,
             use_ceiling=True,
@@ -73,11 +79,12 @@ class TestLightDues:
             extraction_confidence="HIGH",
         )
         item = apply_rule(vessel, rule)
-        assert item.amount_zar == pytest.approx(60_062.04, abs=0.01)
+        assert item.amount == pytest.approx(60_062.04, abs=0.01)
 
     def test_formula_contains_rate(self, vessel: VesselProfile) -> None:
         rule = ExtractedTariffRule(
-            tariff_type="light_dues",
+            tariff_name="light_dues",
+            measurement_basis="GT",
             rate_per_unit=117.08,
             unit_divisor=100,
             use_ceiling=True,
@@ -88,13 +95,14 @@ class TestLightDues:
 
 
 # ---------------------------------------------------------------------------
-# VTS Dues — per-GT with minimum
+# Per-GT rate with minimum floor
 # ---------------------------------------------------------------------------
 
 class TestVtsDues:
     def test_durban_rate(self, vessel: VesselProfile) -> None:
         rule = ExtractedTariffRule(
-            tariff_type="vts_dues",
+            tariff_name="vts_dues",
+            measurement_basis="GT",
             rate_per_unit=0.65,
             unit_divisor=1,
             use_ceiling=False,
@@ -103,7 +111,7 @@ class TestVtsDues:
             extraction_confidence="HIGH",
         )
         item = apply_rule(vessel, rule)
-        assert item.amount_zar == pytest.approx(33_345.00, abs=0.01)
+        assert item.amount == pytest.approx(33_345.00, abs=0.01)
 
     def test_minimum_fee_applied(self) -> None:
         """For a very small vessel, minimum fee should kick in."""
@@ -114,7 +122,8 @@ class TestVtsDues:
             "operational_data": {},
         }, port="Durban")
         rule = ExtractedTariffRule(
-            tariff_type="vts_dues",
+            tariff_name="vts_dues",
+            measurement_basis="GT",
             rate_per_unit=0.65,
             unit_divisor=1,
             use_ceiling=False,
@@ -122,18 +131,18 @@ class TestVtsDues:
             num_services=1,
         )
         item = apply_rule(small_vessel, rule)
-        # 100 * 0.65 = 65.0 < 235.52 minimum
-        assert item.amount_zar == pytest.approx(235.52, abs=0.01)
+        assert item.amount == pytest.approx(235.52, abs=0.01)
 
 
 # ---------------------------------------------------------------------------
-# Pilotage Dues — basic fee + per-100-GT add-on
+# Basic fee + per-100-GT add-on (classic pilotage shape)
 # ---------------------------------------------------------------------------
 
 class TestPilotageDues:
     def test_exact_match(self, vessel: VesselProfile) -> None:
         rule = ExtractedTariffRule(
-            tariff_type="pilotage_dues",
+            tariff_name="pilotage_dues",
+            measurement_basis="GT",
             basic_fee=18_608.61,
             rate_per_unit=9.72,
             unit_divisor=100,
@@ -142,35 +151,35 @@ class TestPilotageDues:
             extraction_confidence="HIGH",
         )
         item = apply_rule(vessel, rule)
-        assert item.amount_zar == pytest.approx(47_189.94, abs=0.01)
+        assert item.amount == pytest.approx(47_189.94, abs=0.01)
 
 
 # ---------------------------------------------------------------------------
-# Towage Dues — bracket schedule
+# Bracket schedule (classic towage shape)
 # ---------------------------------------------------------------------------
 
 _TOWAGE_BRACKETS = [
-    RateBracket(min_gt=0, max_gt=2000, base_fee=8_140.00, per_100_gt_above_min=0.0),
-    RateBracket(min_gt=2001, max_gt=10_000, base_fee=12_633.99, per_100_gt_above_min=268.99),
-    RateBracket(min_gt=10_001, max_gt=50_000, base_fee=38_494.51, per_100_gt_above_min=84.95),
-    RateBracket(min_gt=50_001, max_gt=100_000, base_fee=73_118.07, per_100_gt_above_min=32.24),
-    RateBracket(min_gt=100_001, max_gt=None, base_fee=93_548.13, per_100_gt_above_min=23.65),
+    RateBracket(min_value=0,       max_value=2000,    base_fee=8_140.00,  rate_above_min=0.0,    rate_divisor=100),
+    RateBracket(min_value=2001,    max_value=10_000,  base_fee=12_633.99, rate_above_min=268.99, rate_divisor=100),
+    RateBracket(min_value=10_001,  max_value=50_000,  base_fee=38_494.51, rate_above_min=84.95,  rate_divisor=100),
+    RateBracket(min_value=50_001,  max_value=100_000, base_fee=73_118.07, rate_above_min=32.24,  rate_divisor=100),
+    RateBracket(min_value=100_001, max_value=None,    base_fee=93_548.13, rate_above_min=23.65,  rate_divisor=100),
 ]
 
 
 class TestTowageDues:
     def test_exact_match(self, vessel: VesselProfile) -> None:
         rule = ExtractedTariffRule(
-            tariff_type="towage_dues",
+            tariff_name="towage_dues",
+            measurement_basis="GT",
             brackets=_TOWAGE_BRACKETS,
             num_services=2,
             extraction_confidence="HIGH",
         )
         item = apply_rule(vessel, rule)
-        assert item.amount_zar == pytest.approx(147_074.38, abs=0.01)
+        assert item.amount == pytest.approx(147_074.38, abs=0.01)
 
     def test_small_vessel_first_bracket(self) -> None:
-        """Vessel in the first bracket should get the flat base fee."""
         small = load_vessel_profile({
             "vessel_metadata": {"name": "SMALL"},
             "technical_specs": {"type": "Tug", "dwt": 500, "gross_tonnage": 1000,
@@ -178,56 +187,55 @@ class TestTowageDues:
             "operational_data": {},
         }, port="Durban")
         rule = ExtractedTariffRule(
-            tariff_type="towage_dues",
+            tariff_name="towage_dues",
+            measurement_basis="GT",
             brackets=_TOWAGE_BRACKETS,
             num_services=2,
         )
         item = apply_rule(small, rule)
-        # First bracket: base_fee=8140, per_100_gt=0
-        assert item.amount_zar == pytest.approx(8_140.00 * 2, abs=0.01)
+        assert item.amount == pytest.approx(8_140.00 * 2, abs=0.01)
 
 
 # ---------------------------------------------------------------------------
-# Running Lines — flat per-service fee
+# Flat per-service fee (e.g. mooring line service)
 # ---------------------------------------------------------------------------
 
 class TestRunningLines:
     def test_exact_match(self, vessel: VesselProfile) -> None:
         rule = ExtractedTariffRule(
-            tariff_type="running_lines",
+            tariff_name="running_lines",
+            measurement_basis="NONE",
             basic_fee=1_654.56,
             rate_per_unit=0,
-            unit_divisor=1,
             use_ceiling=False,
             num_services=12,
             extraction_confidence="HIGH",
         )
         item = apply_rule(vessel, rule)
-        assert item.amount_zar == pytest.approx(19_854.72, abs=0.01)
+        assert item.amount == pytest.approx(19_854.72, abs=0.01)
 
     def test_flat_fee_not_scaled_by_gt(self, vessel: VesselProfile) -> None:
-        """Flat fee must NOT be multiplied by GT — only by num_services."""
         rule = ExtractedTariffRule(
-            tariff_type="running_lines",
+            tariff_name="running_lines",
+            measurement_basis="NONE",
             basic_fee=1_654.56,
             rate_per_unit=0,
-            unit_divisor=1,
             use_ceiling=False,
             num_services=12,
         )
         item = apply_rule(vessel, rule)
-        # If it were multiplied by GT it would be ~85M, not ~20K
-        assert item.amount_zar < 100_000
+        assert item.amount < 100_000
 
 
 # ---------------------------------------------------------------------------
-# Port Dues — basic + time component
+# Per-100-GT rate with a time component (classic port dues shape)
 # ---------------------------------------------------------------------------
 
 class TestPortDues:
     def test_close_to_ground_truth(self, vessel: VesselProfile) -> None:
         rule = ExtractedTariffRule(
-            tariff_type="port_dues",
+            tariff_name="port_dues",
+            measurement_basis="GT",
             rate_per_unit=192.73,
             unit_divisor=100,
             use_ceiling=True,
@@ -236,11 +244,9 @@ class TestPortDues:
             extraction_confidence="HIGH",
         )
         item = apply_rule(vessel, rule)
-        # Ground truth is 199,549.22; we get 199,371.35 (within ~0.1%)
-        assert item.amount_zar == pytest.approx(199_549.22, rel=0.002)
+        assert item.amount == pytest.approx(199_549.22, rel=0.002)
 
     def test_time_component_increases_with_days(self) -> None:
-        """Longer stay should increase port dues."""
         short_stay = load_vessel_profile({
             "vessel_metadata": {"name": "TEST"},
             "technical_specs": {"type": "Bulk Carrier", "dwt": 50000,
@@ -254,7 +260,8 @@ class TestPortDues:
             "operational_data": {"days_alongside": 5.0},
         }, port="Durban")
         rule = ExtractedTariffRule(
-            tariff_type="port_dues",
+            tariff_name="port_dues",
+            measurement_basis="GT",
             rate_per_unit=192.73,
             unit_divisor=100,
             use_ceiling=True,
@@ -263,44 +270,107 @@ class TestPortDues:
         )
         short_item = apply_rule(short_stay, rule)
         long_item = apply_rule(long_stay, rule)
-        assert long_item.amount_zar > short_item.amount_zar
+        assert long_item.amount > short_item.amount
 
 
 # ---------------------------------------------------------------------------
-# run_all_calculations — integration + error handling
+# New generality: non-GT bases (LOA, DWT, CARGO_MT)
 # ---------------------------------------------------------------------------
+
+class TestAlternativeMeasurementBases:
+    def test_loa_based_rate(self, vessel: VesselProfile) -> None:
+        """Some ports charge by LOA (e.g. hypothetical quay rental)."""
+        rule = ExtractedTariffRule(
+            tariff_name="quay_rental",
+            measurement_basis="LOA",
+            rate_per_unit=10.0,
+            unit_divisor=1,
+            num_services=1,
+        )
+        item = apply_rule(vessel, rule)
+        assert item.amount == pytest.approx(229.2 * 10.0, abs=0.01)
+
+    def test_cargo_mt_based_rate(self, vessel: VesselProfile) -> None:
+        rule = ExtractedTariffRule(
+            tariff_name="wharfage",
+            measurement_basis="CARGO_MT",
+            rate_per_unit=2.5,
+            unit_divisor=1,
+            num_services=1,
+        )
+        item = apply_rule(vessel, rule)
+        assert item.amount == pytest.approx(40_000 * 2.5, abs=0.01)
+
+    def test_flat_fee_no_measurement(self, vessel: VesselProfile) -> None:
+        rule = ExtractedTariffRule(
+            tariff_name="admin_fee",
+            measurement_basis="NONE",
+            basic_fee=500.0,
+            num_services=1,
+        )
+        item = apply_rule(vessel, rule)
+        assert item.amount == pytest.approx(500.0, abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# Integration: the full Transnet rule set (inline fixture) reproduces total
+# ---------------------------------------------------------------------------
+
+def _reference_transnet_rules_for_durban() -> dict[str, ExtractedTariffRule]:
+    """Test-only fixture. Reproduces the Transnet published rates inline so we
+    can assert the calculator computes the right total — without any of this
+    ever living in the production code path.
+    """
+    return {
+        "light_dues": ExtractedTariffRule(
+            tariff_name="light_dues", measurement_basis="GT",
+            rate_per_unit=117.08, unit_divisor=100, use_ceiling=True, num_services=1,
+        ),
+        "vts_dues": ExtractedTariffRule(
+            tariff_name="vts_dues", measurement_basis="GT",
+            rate_per_unit=0.65, unit_divisor=1, minimum_fee=235.52, num_services=1,
+        ),
+        "pilotage_dues": ExtractedTariffRule(
+            tariff_name="pilotage_dues", measurement_basis="GT",
+            basic_fee=18_608.61, rate_per_unit=9.72,
+            unit_divisor=100, use_ceiling=True, num_services=2,
+        ),
+        "towage_dues": ExtractedTariffRule(
+            tariff_name="towage_dues", measurement_basis="GT",
+            brackets=_TOWAGE_BRACKETS, num_services=2,
+        ),
+        "running_lines": ExtractedTariffRule(
+            tariff_name="running_lines", measurement_basis="NONE",
+            basic_fee=1_654.56, num_services=12,
+        ),
+        "port_dues": ExtractedTariffRule(
+            tariff_name="port_dues", measurement_basis="GT",
+            rate_per_unit=192.73, unit_divisor=100, use_ceiling=True,
+            time_rate_per_unit_per_day=57.79, num_services=1,
+        ),
+    }
+
 
 class TestRunAllCalculations:
     def test_total_close_to_ground_truth(self, vessel: VesselProfile) -> None:
-        """Full calculation with Transnet fallback rates matches ground truth within 0.1%."""
-        from calculation.fallback_rates import get_fallback_rules
-        rules = get_fallback_rules("Durban", num_operations=2)
+        """Full calculation with inline reference rules should match the
+        published total within 0.2% — proving the calculator is correct."""
+        rules = _reference_transnet_rules_for_durban()
         result = run_all_calculations(vessel, rules)
-        assert result.total_zar == pytest.approx(506_830.83, rel=0.002)
+        assert result.total == pytest.approx(506_830.83, rel=0.002)
         assert len(result.line_items) == 6
 
-    def test_failed_tariff_produces_error_item(self, vessel: VesselProfile) -> None:
-        """A rule with an invalid measurement_basis should produce an error line item."""
-        bad_rule = ExtractedTariffRule(
-            tariff_type="bad_tariff",
-            measurement_basis="GT",  # type: ignore[arg-type]
-            rate_per_unit=100.0,
-        )
-        # Monkey-patch to trigger an error inside apply_rule
-        bad_rule_dict = bad_rule.model_dump()
-        bad_rule_dict["measurement_basis"] = "INVALID"
-        # We can't construct this via Pydantic (Literal constraint), so test via run_all_calculations
-        # which catches exceptions. Instead, test with a rule that will fail in _get_basis.
-        # Use a valid rule but break vessel to have missing data — actually, let's just
-        # verify the error path by checking that run_all_calculations handles it.
-        rules = {"good": ExtractedTariffRule(
-            tariff_type="good",
-            rate_per_unit=1.0,
-            num_services=1,
+    def test_error_handling_unknown_basis(self, vessel: VesselProfile) -> None:
+        """An invalid unit_divisor should surface as an error line item, not crash."""
+        rules = {"bad": ExtractedTariffRule(
+            tariff_name="bad",
+            measurement_basis="GT",
+            rate_per_unit=10.0,
+            unit_divisor=0,  # invalid — should raise inside apply_rule
         )}
         result = run_all_calculations(vessel, rules)
         assert len(result.line_items) == 1
-        assert result.line_items[0].error == ""
+        assert result.line_items[0].error != ""
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +379,6 @@ class TestRunAllCalculations:
 
 class TestEdgeCases:
     def test_zero_gt_vessel(self) -> None:
-        """A vessel with 0 GT should not crash."""
         zero_gt = load_vessel_profile({
             "vessel_metadata": {"name": "ZERO"},
             "technical_specs": {"type": "Barge", "dwt": 0, "gross_tonnage": 0,
@@ -317,17 +386,17 @@ class TestEdgeCases:
             "operational_data": {"days_alongside": 1.0},
         }, port="Durban")
         rule = ExtractedTariffRule(
-            tariff_type="light_dues",
+            tariff_name="light_dues",
+            measurement_basis="GT",
             rate_per_unit=117.08,
             unit_divisor=100,
             use_ceiling=True,
             num_services=1,
         )
         item = apply_rule(zero_gt, rule)
-        assert item.amount_zar == 0.0
+        assert item.amount == 0.0
 
     def test_ceiling_rounding(self) -> None:
-        """ceil(51300/100) = 513 — verify the ceiling is applied correctly."""
         vessel = load_vessel_profile({
             "vessel_metadata": {"name": "TEST"},
             "technical_specs": {"type": "Cargo", "dwt": 1000, "gross_tonnage": 51300,
@@ -335,17 +404,17 @@ class TestEdgeCases:
             "operational_data": {},
         }, port="Durban")
         rule = ExtractedTariffRule(
-            tariff_type="test",
+            tariff_name="test",
+            measurement_basis="GT",
             rate_per_unit=1.0,
             unit_divisor=100,
             use_ceiling=True,
             num_services=1,
         )
         item = apply_rule(vessel, rule)
-        assert item.amount_zar == pytest.approx(math.ceil(51300 / 100) * 1.0)
+        assert item.amount == pytest.approx(math.ceil(51300 / 100) * 1.0)
 
     def test_no_ceiling_rounding(self) -> None:
-        """Without ceiling, 51300/100 = 513.0 exactly (no rounding)."""
         vessel = load_vessel_profile({
             "vessel_metadata": {"name": "TEST"},
             "technical_specs": {"type": "Cargo", "dwt": 1000, "gross_tonnage": 51301,
@@ -353,12 +422,30 @@ class TestEdgeCases:
             "operational_data": {},
         }, port="Durban")
         rule = ExtractedTariffRule(
-            tariff_type="test",
+            tariff_name="test",
+            measurement_basis="GT",
             rate_per_unit=1.0,
             unit_divisor=100,
             use_ceiling=False,
             num_services=1,
         )
         item = apply_rule(vessel, rule)
-        # 51301/100 = 513.01, not ceil'd to 514
-        assert item.amount_zar == pytest.approx(513.01)
+        assert item.amount == pytest.approx(513.01)
+
+    def test_maximum_fee_cap_applied(self) -> None:
+        vessel = load_vessel_profile({
+            "vessel_metadata": {"name": "BIG"},
+            "technical_specs": {"type": "Bulk Carrier", "dwt": 200000,
+                                "gross_tonnage": 200000, "net_tonnage": 150000, "loa_meters": 350.0},
+            "operational_data": {},
+        }, port="Durban")
+        rule = ExtractedTariffRule(
+            tariff_name="capped",
+            measurement_basis="GT",
+            rate_per_unit=10.0,
+            unit_divisor=1,
+            maximum_fee=50_000.0,
+            num_services=1,
+        )
+        item = apply_rule(vessel, rule)
+        assert item.amount == pytest.approx(50_000.0, abs=0.01)

@@ -20,7 +20,13 @@ class PageContent:
     text: str
 
 # ---------------------------------------------------------------------------
-# Section header patterns (Transnet tariff book structure)
+# Generic numbered-section header pattern.
+#
+# Matches either ``SECTION <n>`` or ``<n>.<m>[.<k>] <Capital>`` — the shape
+# used by virtually every regulatory / tariff document we have encountered.
+# This is only used to tag page metadata so discovery can reference sections
+# by name; it does NOT gate retrieval, and the pipeline works even when no
+# section match is found (``current_section`` falls back to "unknown").
 # ---------------------------------------------------------------------------
 _SECTION_RE = re.compile(
     r"(SECTION\s+\d+|^\d+\.\d+(?:\.\d+)?\s+[A-Z])", re.MULTILINE | re.IGNORECASE

@@ -25,32 +25,26 @@ CHROMA_PERSIST_DIR: str = str(Path(__file__).parent.parent.parent / ".chroma_db"
 CHROMA_COLLECTION_NAME: str = "port_tariffs"
 
 # ---------------------------------------------------------------------------
-# Chunking
+# Chunking + retrieval
 # ---------------------------------------------------------------------------
 CHUNK_SIZE: int = 1500
 CHUNK_OVERLAP: int = 200
+
+# Per-tariff retrieval depth (used when extracting one rule)
 TOP_K_RETRIEVAL: int = 8
 
-# ---------------------------------------------------------------------------
-# Tariff types the system must calculate
-# ---------------------------------------------------------------------------
-TARIFF_TYPES: list[str] = [
-    "light_dues",
-    "vts_dues",
-    "pilotage_dues",
-    "towage_dues",
-    "running_lines",
-    "port_dues",
-]
+# Retrieval depth for the discovery stage (scanning the whole document
+# for the set of chargeable tariff categories it defines)
+DISCOVERY_TOP_K: int = 40
+
+# Safety cap on how many distinct tariff categories discovery can return
+# (prevents runaway extraction against pathological PDFs)
+MAX_DISCOVERED_TARIFFS: int = 30
 
 # ---------------------------------------------------------------------------
-# Section keywords for smarter retrieval
+# NOTE: This file used to contain TARIFF_TYPES and TARIFF_SECTION_KEYWORDS
+# constants that hardcoded the six Transnet tariffs and their section numbers.
+# Both were removed: the pipeline now discovers tariff categories from the
+# document at runtime via ``discover_tariffs`` in ingestion/tariff_extractor.py.
+# No tariff names, section numbers, or port-specific keywords live here.
 # ---------------------------------------------------------------------------
-TARIFF_SECTION_KEYWORDS: dict[str, list[str]] = {
-    "light_dues":    ["light dues", "section 1", "1.1"],
-    "vts_dues":      ["vessel traffic", "VTS", "section 2", "2.1"],
-    "pilotage_dues": ["pilotage", "pilot", "section 3.3", "3.3"],
-    "towage_dues":   ["tug", "towage", "craft assistance", "section 3.6", "3.6"],
-    "running_lines": ["running of vessel lines", "mooring", "section 3.9", "3.9"],
-    "port_dues":     ["port dues", "port fees", "section 4.1", "4.1"],
-}
